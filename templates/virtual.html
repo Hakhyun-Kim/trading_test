@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Virtual Trading - Upbit Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .trade-history {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .opportunity-card {
+            transition: background-color 0.3s;
+        }
+        .opportunity-card.profitable {
+            background-color: #d4edda;
+        }
+        .balance-card {
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row mb-4">
+            <div class="col">
+                <h1>Virtual Trading</h1>
+                <p class="text-muted">Trade with real-time prices without using real assets</p>
+            </div>
+            <div class="col-auto">
+                <a href="/" class="btn btn-outline-primary">Back to Backtest</a>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Balance Card -->
+            <div class="col-md-6 mb-4">
+                <div class="card balance-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Current Balance</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                                <p class="mb-1">USDT Balance</p>
+                <h3 id="usd-balance">$0.00</h3>
+                            </div>
+                            <div class="col-6">
+                                <p class="mb-1">KRW Balance</p>
+                                <h3 id="krw-balance">₩0</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Opportunity Card -->
+            <div class="col-md-6 mb-4">
+                <div class="card opportunity-card" id="opportunity-card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Current Market Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <p><strong>USD/KRW Rate:</strong><br><span id="usd-krw-rate">0.00</span></p>
+                                <p><strong>USDT/KRW Price:</strong><br><span id="usdt-krw-price">0.00</span></p>
+                            </div>
+                            <div class="col-6">
+                                <p><strong>Difference:</strong><br><span id="difference">0.00%</span></p>
+                                <p><strong>Suggested Action:</strong><br><span id="suggested-action">HOLD</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Controls -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Trading Controls</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="input-group mb-3">
+                                    <span class="input-group-text">Amount (USDT)</span>
+                                    <input type="number" class="form-control" id="trade-amount" value="1000" min="100" step="100">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-success me-2" onclick="executeTrade('BUY')">Buy USDT</button>
+                                <button class="btn btn-danger" onclick="executeTrade('SELL')">Sell USDT</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trade History -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Trade History</h5>
+            </div>
+            <div class="card-body trade-history">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Action</th>
+                            <th>Amount (USDT)</th>
+                            <th>Price (KRW)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trade-history">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        const clientId = Date.now().toString();
+
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/virtual/${clientId}`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === "update") {
+                    updateUI(data);
+                } else if (data.type === "trade_result") {
+                    handleTradeResult(data.result);
+                }
+            };
+
+            ws.onclose = function() {
+                setTimeout(connect, 1000);  // Reconnect after 1 second
+            };
+        }
+
+        function updateUI(data) {
+            // Update balances
+            document.getElementById('usd-balance').textContent = `$${data.balance.USD.toFixed(2)}`;
+            document.getElementById('krw-balance').textContent = `₩${data.balance.KRW.toFixed(0)}`;
+
+            // Update market status
+            const opp = data.opportunity;
+            document.getElementById('usd-krw-rate').textContent = opp.usd_krw_rate.toFixed(2);
+            document.getElementById('usdt-krw-price').textContent = opp.usdt_krw_price.toFixed(2);
+            document.getElementById('difference').textContent = `${opp.difference_percentage.toFixed(2)}%`;
+            document.getElementById('suggested-action').textContent = opp.action;
+
+            // Update opportunity card color
+            const card = document.getElementById('opportunity-card');
+            card.classList.toggle('profitable', opp.profitable);
+
+            // Update trade history
+            const history = document.getElementById('trade-history');
+            history.innerHTML = data.trade_history.map(trade => `
+                <tr>
+                    <td>${new Date(trade.timestamp).toLocaleString()}</td>
+                    <td>
+                        <span class="badge bg-${trade.action === 'BUY' ? 'success' : 'danger'}">
+                            ${trade.action}
+                        </span>
+                    </td>
+                    <td>$${trade.amount_usd.toFixed(2)}</td>
+                    <td>₩${trade.usdt_krw_price.toFixed(2)}</td>
+                    <td>
+                        <span class="badge bg-${trade.success ? 'success' : 'danger'}">
+                            ${trade.success ? 'Success' : 'Failed'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function executeTrade(action) {
+            const amount = parseFloat(document.getElementById('trade-amount').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    action: action,
+                    amount: amount
+                }));
+            }
+        }
+
+        function handleTradeResult(result) {
+            const alertClass = result.success ? 'success' : 'danger';
+            const message = result.success ? 'Trade executed successfully' : `Trade failed: ${result.reason}`;
+            
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Connect when page loads
+        connect();
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

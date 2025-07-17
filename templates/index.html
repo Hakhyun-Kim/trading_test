@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Upbit Trading Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: transform 0.2s;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+        }
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #667eea;
+        }
+        .form-floating > label {
+            color: #6c757d;
+        }
+        .btn-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+        }
+        .btn-custom:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+            color: white;
+        }
+        .status-card {
+            border-left: 4px solid #667eea;
+        }
+        .file-upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 0.375rem;
+            padding: 2rem;
+            text-align: center;
+            transition: border-color 0.15s ease-in-out;
+        }
+        .file-upload-area:hover {
+            border-color: #667eea;
+        }
+        .file-upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark gradient-bg">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-robot me-2"></i>
+                Enhanced Upbit Trading Bot
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/virtual">Virtual Trading</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/live">Live Trading</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/analytics">Analytics</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="gradient-bg text-white py-5">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="display-4 fw-bold mb-3">Upbit Arbitrage Trading Bot</h1>
+                    <p class="lead mb-4">Advanced cryptocurrency arbitrage trading with comprehensive risk management and real-time monitoring.</p>
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h3 class="fw-bold">{{ active_sessions }}</h3>
+                            <p class="mb-0">Active Sessions</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h3 class="fw-bold">{{ virtual_traders }}</h3>
+                            <p class="mb-0">Virtual Traders</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h3 class="fw-bold" id="market-status">Loading...</h3>
+                            <p class="mb-0">Market Status</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="text-center">
+                        <i class="fas fa-chart-line" style="font-size: 8rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mt-5">
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-pills nav-fill mb-4" id="mainTabs">
+            <li class="nav-item">
+                <a class="nav-link active" id="backtest-tab" data-bs-toggle="pill" href="#backtest">
+                    <i class="fas fa-chart-bar me-2"></i>Backtest Strategy
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="config-tab" data-bs-toggle="pill" href="#config">
+                    <i class="fas fa-cog me-2"></i>API Configuration
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="optimize-tab" data-bs-toggle="pill" href="#optimize">
+                    <i class="fas fa-magic me-2"></i>Parameter Optimization
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="status-tab" data-bs-toggle="pill" href="#status">
+                    <i class="fas fa-info-circle me-2"></i>System Status
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabsContent">
+            <!-- Backtest Tab -->
+            <div class="tab-pane fade show active" id="backtest">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="card shadow">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar me-2"></i>Enhanced Backtest Configuration
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="backtestForm" action="/run-backtest" method="post">
+                                    <div class="row">
+                                        <!-- Date Range -->
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="date" class="form-control" id="start_date" name="start_date" required>
+                                                <label for="start_date">Start Date</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="date" class="form-control" id="end_date" name="end_date" required>
+                                                <label for="end_date">End Date</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Quick Date Ranges -->
+                                    <div class="mb-3">
+                                        <label class="form-label">Quick Date Ranges:</label>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDateRange(7)">7 Days</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDateRange(30)">30 Days</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDateRange(90)">3 Months</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setDateRange(365)">1 Year</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <!-- Initial Balances -->
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="initial_balance" name="initial_balance" 
+                                                       value="5000" step="100" min="100" required>
+                                                <label for="initial_balance">Initial USDT Balance</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="initial_balance_krw" name="initial_balance_krw" 
+                                                       value="6500000" step="100000" min="0" required>
+                                                <label for="initial_balance_krw">Initial KRW Balance</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="max_trade_amount" name="max_trade_amount" 
+                                                       value="1000" step="100" min="100" required>
+                                                <label for="max_trade_amount">Max Trade Amount (USDT)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <!-- Strategy Parameters -->
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="price_threshold" name="price_threshold" 
+                                                       value="0.5" step="0.1" min="0.1" required>
+                                                <label for="price_threshold">Price Threshold (%)</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="stop_loss" name="stop_loss" 
+                                                       value="2.0" step="0.1" min="0.1" required>
+                                                <label for="stop_loss">Stop Loss (%)</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="take_profit" name="take_profit" 
+                                                       value="1.0" step="0.1" min="0.1" required>
+                                                <label for="take_profit">Take Profit (%)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <!-- Advanced Parameters -->
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="number" class="form-control" id="max_trades_per_day" name="max_trades_per_day" 
+                                                       value="10" step="1" min="1" max="50" required>
+                                                <label for="max_trades_per_day">Max Trades per Day</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mt-3">
+                                                <input class="form-check-input" type="checkbox" id="use_real_data" name="use_real_data">
+                                                <label class="form-check-label" for="use_real_data">
+                                                    Use Real Market Data
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-custom btn-lg">
+                                            <i class="fas fa-play me-2"></i>Run Backtest
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <!-- Real-time Market Data -->
+                        <div class="card shadow mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-chart-line me-2"></i>Live Market Data
+                                </h6>
+                            </div>
+                            <div class="card-body" id="marketData">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading market data...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tips Card -->
+                        <div class="card shadow">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-lightbulb me-2"></i>Backtest Tips
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Start with longer periods (3+ months)</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Use realistic trade amounts</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enable real data for accuracy</li>
+                                    <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Analyze max drawdown carefully</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Configuration Tab -->
+            <div class="tab-pane fade" id="config">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="card shadow">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-key me-2"></i>API Key Configuration
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <!-- Manual Input -->
+                                <h6 class="border-bottom pb-2 mb-3">Manual Input</h6>
+                                <form id="apiKeyForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="password" class="form-control" id="api_key" placeholder="API Key">
+                                                <label for="api_key">Upbit API Key</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="password" class="form-control" id="secret_key" placeholder="Secret Key">
+                                                <label for="secret_key">Upbit Secret Key</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-success" onclick="testApiKeys()">
+                                        <i class="fas fa-check me-2"></i>Test API Keys
+                                    </button>
+                                </form>
+
+                                <hr class="my-4">
+
+                                <!-- File Upload -->
+                                <h6 class="border-bottom pb-2 mb-3">Upload API Key File</h6>
+                                <div class="file-upload-area" id="fileUploadArea" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);" ondragleave="dragLeaveHandler(event);">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <h6>Drag & Drop your API key file here</h6>
+                                    <p class="text-muted">or click to browse</p>
+                                    <input type="file" class="d-none" id="apiKeyFile" accept=".json,.env,.txt" onchange="handleFileSelect(event)">
+                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('apiKeyFile').click()">
+                                        <i class="fas fa-folder-open me-2"></i>Browse Files
+                                    </button>
+                                </div>
+
+                                <div id="fileContent" class="mt-3" style="display: none;">
+                                    <div class="alert alert-info">
+                                        <h6><i class="fas fa-file-check me-2"></i>File Content Preview:</h6>
+                                        <pre id="filePreview" class="bg-light p-2 rounded mt-2" style="max-height: 200px; overflow-y: auto;"></pre>
+                                        <button type="button" class="btn btn-success mt-2" onclick="loadKeysFromFile()">
+                                            <i class="fas fa-download me-2"></i>Load Keys from File
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <!-- Environment File Generator -->
+                                <h6 class="border-bottom pb-2 mb-3">Generate .env File</h6>
+                                <p class="text-muted">Create a .env file with your API keys for secure storage.</p>
+                                <button type="button" class="btn btn-outline-secondary" onclick="generateEnvFile()">
+                                    <i class="fas fa-download me-2"></i>Download .env Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parameter Optimization Tab -->
+            <div class="tab-pane fade" id="optimize">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="card shadow">
+                            <div class="card-header bg-purple text-white" style="background-color: #6f42c1 !important;">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-magic me-2"></i>Strategy Optimization
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="optimizeForm">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="date" class="form-control" id="opt_start_date" required>
+                                                <label for="opt_start_date">Start Date</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-floating mb-3">
+                                                <input type="date" class="form-control" id="opt_end_date" required>
+                                                <label for="opt_end_date">End Date</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h6 class="border-bottom pb-2 mb-3">Parameter Ranges</h6>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <label class="form-label">Price Threshold (%)</label>
+                                            <div class="row">
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="price_thresh_min" value="0.1" step="0.1" placeholder="Min">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="price_thresh_max" value="2.0" step="0.1" placeholder="Max">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="price_thresh_step" value="0.1" step="0.1" placeholder="Step">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Trade Amount (USDT)</label>
+                                            <div class="row">
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="trade_amt_min" value="500" step="100" placeholder="Min">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="trade_amt_max" value="2000" step="100" placeholder="Max">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="trade_amt_step" value="250" step="50" placeholder="Step">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">Stop Loss (%)</label>
+                                            <div class="row">
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="stop_loss_min" value="1.0" step="0.1" placeholder="Min">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="stop_loss_max" value="5.0" step="0.1" placeholder="Max">
+                                                </div>
+                                                <div class="col-4">
+                                                    <input type="number" class="form-control form-control-sm" id="stop_loss_step" value="0.5" step="0.1" placeholder="Step">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-grid mt-4">
+                                        <button type="button" class="btn btn-custom btn-lg" onclick="runOptimization()">
+                                            <i class="fas fa-magic me-2"></i>Start Optimization
+                                        </button>
+                                    </div>
+                                </form>
+
+                                <div id="optimizationResults" class="mt-4" style="display: none;">
+                                    <h6 class="border-bottom pb-2 mb-3">Optimization Results</h6>
+                                    <div id="optimizationContent"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status Tab -->
+            <div class="tab-pane fade" id="status">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card shadow status-card">
+                            <div class="card-body">
+                                <h6 class="card-title">System Health</h6>
+                                <p class="card-text" id="systemHealth">Checking...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card shadow status-card">
+                            <div class="card-body">
+                                <h6 class="card-title">Active Sessions</h6>
+                                <p class="card-text" id="activeSessions">{{ active_sessions }} sessions running</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card shadow mt-4">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">Trading Sessions</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="sessionsList">Loading sessions...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 id="loadingText">Processing...</h5>
+                    <p class="text-muted" id="loadingSubtext">Please wait while we process your request.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let loadedApiKeys = { api_key: '', secret_key: '' };
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default dates
+            setDateRange(30);
+            setOptimizationDates(90);
+            
+            // Load market data
+            loadMarketData();
+            
+            // Load system status
+            loadSystemStatus();
+            
+            // Set up form submission
+            setupFormSubmission();
+        });
+
+        // Date range functions
+        function setDateRange(days) {
+            const endDate = new Date();
+            const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
+            
+            document.getElementById('start_date').value = startDate.toISOString().split('T')[0];
+            document.getElementById('end_date').value = endDate.toISOString().split('T')[0];
+        }
+
+        function setOptimizationDates(days) {
+            const endDate = new Date();
+            const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
+            
+            document.getElementById('opt_start_date').value = startDate.toISOString().split('T')[0];
+            document.getElementById('opt_end_date').value = endDate.toISOString().split('T')[0];
+        }
+
+        // Market data functions
+        async function loadMarketData() {
+            try {
+                const response = await fetch('/api/market-data');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateMarketDataDisplay(data.data);
+                    updateMarketStatus(data.data);
+                } else {
+                    document.getElementById('marketData').innerHTML = 
+                        '<div class="alert alert-warning">Unable to load market data</div>';
+                }
+            } catch (error) {
+                document.getElementById('marketData').innerHTML = 
+                    '<div class="alert alert-danger">Error loading market data</div>';
+            }
+        }
+
+        function updateMarketDataDisplay(data) {
+            const html = `
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h6 class="text-muted">USD/KRW Rate</h6>
+                        <h5>${data.usd_krw_rate?.toFixed(2) || 'N/A'}</h5>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-muted">USDT/KRW Price</h6>
+                        <h5>${data.usdt_krw_price?.toFixed(2) || 'N/A'}</h5>
+                    </div>
+                </div>
+                <hr>
+                <div class="text-center">
+                    <h6 class="text-muted">Price Difference</h6>
+                    <h4 class="${data.difference_percentage > 0 ? 'text-success' : 'text-danger'}">
+                        ${data.difference_percentage?.toFixed(2) || 'N/A'}%
+                    </h4>
+                    <span class="badge ${data.profitable ? 'bg-success' : 'bg-secondary'}">
+                        ${data.action || 'HOLD'}
+                    </span>
+                </div>
+            `;
+            document.getElementById('marketData').innerHTML = html;
+        }
+
+        function updateMarketStatus(data) {
+            const statusElement = document.getElementById('market-status');
+            if (data.profitable) {
+                statusElement.textContent = 'Opportunity';
+                statusElement.className = 'fw-bold text-success';
+            } else {
+                statusElement.textContent = 'Monitoring';
+                statusElement.className = 'fw-bold';
+            }
+        }
+
+        // File upload functions
+        function dragOverHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('fileUploadArea').classList.add('dragover');
+        }
+
+        function dragLeaveHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('fileUploadArea').classList.remove('dragover');
+        }
+
+        function dropHandler(ev) {
+            ev.preventDefault();
+            document.getElementById('fileUploadArea').classList.remove('dragover');
+            
+            const files = ev.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                document.getElementById('filePreview').textContent = content;
+                document.getElementById('fileContent').style.display = 'block';
+                
+                // Store file content for later use
+                window.fileContent = content;
+            };
+            reader.readAsText(file);
+        }
+
+        function loadKeysFromFile() {
+            try {
+                const content = window.fileContent;
+                let apiKey = '', secretKey = '';
+                
+                if (content.includes('UPBIT_API_KEY')) {
+                    // .env format
+                    const lines = content.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('UPBIT_API_KEY=')) {
+                            apiKey = line.split('=')[1].trim();
+                        } else if (line.startsWith('UPBIT_SECRET_KEY=')) {
+                            secretKey = line.split('=')[1].trim();
+                        }
+                    }
+                } else if (content.startsWith('{')) {
+                    // JSON format
+                    const data = JSON.parse(content);
+                    apiKey = data.api_key || data.UPBIT_API_KEY || '';
+                    secretKey = data.secret_key || data.UPBIT_SECRET_KEY || '';
+                }
+                
+                if (apiKey && secretKey) {
+                    document.getElementById('api_key').value = apiKey;
+                    document.getElementById('secret_key').value = secretKey;
+                    loadedApiKeys = { api_key: apiKey, secret_key: secretKey };
+                    
+                    showAlert('success', 'API keys loaded successfully from file!');
+                } else {
+                    showAlert('warning', 'Could not find valid API keys in the file.');
+                }
+            } catch (error) {
+                showAlert('danger', 'Error parsing file: ' + error.message);
+            }
+        }
+
+        function generateEnvFile() {
+            const apiKey = document.getElementById('api_key').value || 'your_upbit_api_key';
+            const secretKey = document.getElementById('secret_key').value || 'your_upbit_secret_key';
+            
+            const envContent = `# Upbit API Keys
+UPBIT_API_KEY=${apiKey}
+UPBIT_SECRET_KEY=${secretKey}
+
+# Trading Configuration
+MAX_TRADE_AMOUNT=1000
+PRICE_THRESHOLD=0.5
+MAX_DAILY_LOSS=500
+`;
+            
+            const blob = new Blob([envContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '.env';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function testApiKeys() {
+            const apiKey = document.getElementById('api_key').value;
+            const secretKey = document.getElementById('secret_key').value;
+            
+            if (!apiKey || !secretKey) {
+                showAlert('warning', 'Please enter both API key and secret key.');
+                return;
+            }
+            
+            showLoading('Testing API Keys', 'Validating your credentials...');
+            
+            try {
+                // Create a test session to validate keys
+                const formData = new FormData();
+                formData.append('session_type', 'live');
+                formData.append('config', JSON.stringify({
+                    api_key: apiKey,
+                    secret_key: secretKey,
+                    initial_balance: 1000,
+                    max_trade_amount: 100
+                }));
+                
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                hideLoading();
+                
+                if (result.success) {
+                    // Delete the test session
+                    await fetch(`/api/sessions/${result.session_id}`, { method: 'DELETE' });
+                    showAlert('success', 'API keys are valid and working!');
+                    loadedApiKeys = { api_key: apiKey, secret_key: secretKey };
+                } else {
+                    showAlert('danger', 'API key validation failed: ' + result.detail);
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('danger', 'Error testing API keys: ' + error.message);
+            }
+        }
+
+        // Optimization functions
+        async function runOptimization() {
+            const startDate = document.getElementById('opt_start_date').value;
+            const endDate = document.getElementById('opt_end_date').value;
+            
+            if (!startDate || !endDate) {
+                showAlert('warning', 'Please select start and end dates for optimization.');
+                return;
+            }
+            
+            const paramRanges = {
+                price_threshold: [
+                    parseFloat(document.getElementById('price_thresh_min').value),
+                    parseFloat(document.getElementById('price_thresh_max').value),
+                    parseFloat(document.getElementById('price_thresh_step').value)
+                ],
+                max_trade_amount: [
+                    parseFloat(document.getElementById('trade_amt_min').value),
+                    parseFloat(document.getElementById('trade_amt_max').value),
+                    parseFloat(document.getElementById('trade_amt_step').value)
+                ],
+                stop_loss_threshold: [
+                    parseFloat(document.getElementById('stop_loss_min').value),
+                    parseFloat(document.getElementById('stop_loss_max').value),
+                    parseFloat(document.getElementById('stop_loss_step').value)
+                ]
+            };
+            
+            showLoading('Running Optimization', 'This may take several minutes...');
+            
+            try {
+                const url = `/api/optimize?start_date=${startDate}&end_date=${endDate}&param_ranges=${encodeURIComponent(JSON.stringify(paramRanges))}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                hideLoading();
+                
+                if (result.success) {
+                    displayOptimizationResults(result.optimization_result);
+                } else {
+                    showAlert('danger', 'Optimization failed: ' + result.error);
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('danger', 'Error running optimization: ' + error.message);
+            }
+        }
+
+        function displayOptimizationResults(results) {
+            const sortedResults = results.all_results.sort((a, b) => b.return_percentage - a.return_percentage);
+            const topResults = sortedResults.slice(0, 5);
+            
+            let html = `
+                <div class="alert alert-success">
+                    <h6><i class="fas fa-trophy me-2"></i>Best Parameters Found:</h6>
+                    <pre>${JSON.stringify(results.best_params, null, 2)}</pre>
+                    <p class="mb-0"><strong>Best Return:</strong> ${results.best_return.toFixed(2)}%</p>
+                </div>
+                
+                <h6>Top 5 Results:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Return %</th>
+                                <th>Drawdown %</th>
+                                <th>Win Rate %</th>
+                                <th>Trades</th>
+                                <th>Parameters</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            topResults.forEach((result, index) => {
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td class="text-success">${result.return_percentage.toFixed(2)}%</td>
+                        <td class="text-danger">${result.max_drawdown.toFixed(2)}%</td>
+                        <td>${result.win_rate.toFixed(1)}%</td>
+                        <td>${result.total_trades}</td>
+                        <td><small>${JSON.stringify(result.params)}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('optimizationContent').innerHTML = html;
+            document.getElementById('optimizationResults').style.display = 'block';
+        }
+
+        // System status functions
+        async function loadSystemStatus() {
+            try {
+                const healthResponse = await fetch('/api/health');
+                const healthData = await healthResponse.json();
+                
+                document.getElementById('systemHealth').innerHTML = 
+                    `<span class="badge bg-success">Healthy</span> Last check: ${new Date(healthData.timestamp).toLocaleTimeString()}`;
+                
+                const sessionsResponse = await fetch('/api/sessions');
+                const sessionsData = await sessionsResponse.json();
+                
+                displaySessions(sessionsData.sessions);
+            } catch (error) {
+                document.getElementById('systemHealth').innerHTML = 
+                    '<span class="badge bg-danger">Error</span> Unable to connect';
+            }
+        }
+
+        function displaySessions(sessions) {
+            if (sessions.length === 0) {
+                document.getElementById('sessionsList').innerHTML = 
+                    '<div class="text-muted">No active trading sessions</div>';
+                return;
+            }
+            
+            let html = '<div class="row">';
+            sessions.forEach(session => {
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${session.type.toUpperCase()} Trading</h6>
+                                <p class="card-text">
+                                    <small class="text-muted">ID: ${session.id}</small><br>
+                                    <small class="text-muted">Created: ${new Date(session.created).toLocaleString()}</small><br>
+                                    <span class="badge bg-${session.status === 'active' ? 'success' : 'secondary'}">${session.status}</span>
+                                </p>
+                                <button class="btn btn-sm btn-outline-danger" onclick="stopSession('${session.id}')">
+                                    <i class="fas fa-stop me-1"></i>Stop
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            document.getElementById('sessionsList').innerHTML = html;
+        }
+
+        async function stopSession(sessionId) {
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('success', 'Session stopped successfully');
+                    loadSystemStatus(); // Refresh the list
+                } else {
+                    showAlert('danger', 'Failed to stop session');
+                }
+            } catch (error) {
+                showAlert('danger', 'Error stopping session: ' + error.message);
+            }
+        }
+
+        // Form submission
+        function setupFormSubmission() {
+            document.getElementById('backtestForm').addEventListener('submit', function(e) {
+                showLoading('Running Backtest', 'Analyzing historical data...');
+                
+                // Form will submit normally, but we show loading indicator
+                setTimeout(() => {
+                    if (document.getElementById('loadingModal').classList.contains('show')) {
+                        hideLoading();
+                    }
+                }, 30000); // Hide loading after 30 seconds max
+            });
+        }
+
+        // Utility functions
+        function showLoading(title, subtitle) {
+            document.getElementById('loadingText').textContent = title;
+            document.getElementById('loadingSubtext').textContent = subtitle;
+            new bootstrap.Modal(document.getElementById('loadingModal')).show();
+        }
+
+        function hideLoading() {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+            if (modal) modal.hide();
+        }
+
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+            alertDiv.style.zIndex = '9999';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        // Auto-refresh market data every 30 seconds
+        setInterval(loadMarketData, 30000);
+    </script>
+</body>
+</html> 
