@@ -6,6 +6,7 @@ An advanced cryptocurrency arbitrage trading bot for Upbit exchange that leverag
 
 ### Core Trading Features
 - **Arbitrage Strategy**: Automatically trades USDT based on price differences with USD/KRW rates
+- **Bitcoin Arbitrage Strategy**: Advanced BTC arbitrage between Binance and Upbit with shorting
 - **Risk Management**: Advanced position sizing, stop-loss, take-profit, and daily loss limits
 - **Virtual Trading**: Test strategies with virtual money before going live
 - **Real-time Monitoring**: Live market data and performance tracking
@@ -16,7 +17,7 @@ An advanced cryptocurrency arbitrage trading bot for Upbit exchange that leverag
 - **Parameter Optimization**: Automated strategy parameter tuning
 - **Performance Metrics**: Sharpe ratio, max drawdown, win rate, profit factor
 - **Commission & Slippage**: Realistic trading cost simulation
-- **Multiple Strategies**: Extensible strategy framework
+- **Multiple Strategies**: Extensible strategy framework including USDT and Bitcoin arbitrage
 
 ### Web Interface
 - **Modern Dashboard**: Real-time trading dashboard with charts
@@ -152,6 +153,26 @@ The bot identifies arbitrage opportunities by comparing:
 - **USDT/KRW price** (from Upbit)
 
 When USDT is trading at a discount to the USD/KRW rate, the bot buys USDT. When at a premium, it sells USDT.
+
+### Bitcoin Arbitrage Strategy
+
+The advanced Bitcoin arbitrage strategy exploits price differences between Binance and Upbit:
+
+1. **Entry (Kimchi Premium < 0.3%)**:
+   - Buy Bitcoin on Upbit with limit orders
+   - Short Bitcoin on Binance with market orders
+
+2. **Exit (Kimchi Premium > 1.3%)**:
+   - Sell Bitcoin on Upbit with limit orders
+   - Close short position on Binance
+
+**Key Features**:
+- Simultaneous trading on two exchanges
+- Smart order execution (limit orders on Upbit, market on Binance)
+- Multiple position tracking
+- Configurable premium thresholds via UI
+
+See [BITCOIN_ARBITRAGE_README.md](BITCOIN_ARBITRAGE_README.md) for detailed documentation.
 
 ### Risk Management
 - **Position Sizing**: Maximum 30% of balance per trade

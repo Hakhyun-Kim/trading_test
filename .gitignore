@@ -220,4 +220,9 @@ improved_backtest_*.json
 # Development files
 debug_*.py
 test_*.py
-*_test.py 
+*_test.py
+
+# Bitcoin arbitrage specific
+bitcoin_backtest_*.json
+bitcoin_trades_*.csv
+btc_premium_history.json 

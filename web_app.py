@@ -20,6 +20,7 @@ from upbit_bot.backtest import BacktestConfig, EnhancedUpbitBacktest
 from upbit_bot.trading_bot import TradingConfig, UpbitTradingBot
 from upbit_bot.kimchi_premium import KimchiPremiumCalculator
 from debug_backtest import DebugUpbitBacktest
+from upbit_bot.bitcoin_backtest import BitcoinBacktestConfig, BitcoinBacktester
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +71,25 @@ class OptimizationRequest(BaseModel):
     threshold_min: float = Field(0.1, description="Minimum threshold to test")
     threshold_max: float = Field(2.0, description="Maximum threshold to test")
     threshold_step: float = Field(0.1, description="Threshold step size")
+
+class BitcoinArbitrageRequest(BaseModel):
+    """Request model for Bitcoin arbitrage strategy"""
+    entry_premium_threshold: float = Field(0.3, description="Enter position when kimchi premium < this %")
+    exit_premium_threshold: float = Field(1.3, description="Exit position when kimchi premium > this %")
+    max_position_size_btc: float = Field(0.1, description="Maximum BTC position size")
+    tick_offset: int = Field(1, description="Number of ticks for limit orders on Upbit")
+    max_open_positions: int = Field(3, description="Maximum simultaneous positions")
+    use_market_orders_binance: bool = Field(True, description="Use market orders on Binance")
+
+class BitcoinBacktestRequest(BaseModel):
+    """Request model for Bitcoin arbitrage backtesting"""
+    start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
+    end_date: str = Field(..., description="End date in YYYY-MM-DD format")
+    initial_balance_krw: float = Field(13_500_000, description="Initial KRW balance")
+    initial_balance_usdt: float = Field(10_000, description="Initial USDT balance")
+    entry_premium_threshold: float = Field(0.3, description="Entry threshold %")
+    exit_premium_threshold: float = Field(1.3, description="Exit threshold %")
+    max_position_size_btc: float = Field(0.1, description="Max BTC per position")
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -218,6 +238,90 @@ async def get_kimchi_premium():
     except Exception as e:
         logger.error(f"Error getting kimchi premium: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting kimchi premium: {str(e)}")
+
+@app.get("/api/bitcoin-kimchi-premium")
+async def get_bitcoin_kimchi_premium():
+    """Get current Bitcoin kimchi premium"""
+    try:
+        from upbit_bot.bitcoin_kimchi_strategy import BitcoinKimchiPremiumCalculator
+        
+        calculator = BitcoinKimchiPremiumCalculator()
+        result = calculator.calculate_bitcoin_kimchi_premium()
+        
+        return {
+            "status": "success",
+            "data": result,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting Bitcoin kimchi premium: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting Bitcoin kimchi premium: {str(e)}")
+
+@app.post("/api/bitcoin-backtest")
+async def run_bitcoin_backtest(request: BitcoinBacktestRequest, background_tasks: BackgroundTasks):
+    """Run Bitcoin arbitrage strategy backtest"""
+    if "bitcoin_backtest" in running_tasks and running_tasks["bitcoin_backtest"]:
+        raise HTTPException(status_code=409, detail="Bitcoin backtest is already running")
+    
+    background_tasks.add_task(execute_bitcoin_backtest, request)
+    return {"status": "started", "message": "Bitcoin arbitrage backtest started"}
+
+@app.post("/api/bitcoin-arbitrage/start")
+async def start_bitcoin_arbitrage(request: BitcoinArbitrageRequest):
+    """Start Bitcoin arbitrage strategy"""
+    if "bitcoin_arbitrage" in running_tasks and running_tasks["bitcoin_arbitrage"]:
+        raise HTTPException(status_code=409, detail="Bitcoin arbitrage is already running")
+    
+    try:
+        from upbit_bot.bitcoin_kimchi_strategy import BitcoinArbitrageConfig, BitcoinArbitrageStrategy
+        
+        config = BitcoinArbitrageConfig(
+            entry_premium_threshold=request.entry_premium_threshold,
+            exit_premium_threshold=request.exit_premium_threshold,
+            max_position_size_btc=request.max_position_size_btc,
+            tick_offset=request.tick_offset,
+            max_open_positions=request.max_open_positions,
+            use_market_orders_binance=request.use_market_orders_binance
+        )
+        
+        # Store strategy instance globally if needed
+        global bitcoin_strategy
+        bitcoin_strategy = BitcoinArbitrageStrategy(config)
+        
+        running_tasks["bitcoin_arbitrage"] = True
+        
+        return {
+            "status": "started",
+            "message": "Bitcoin arbitrage strategy started",
+            "config": {
+                "entry_threshold": config.entry_premium_threshold,
+                "exit_threshold": config.exit_premium_threshold,
+                "max_position_size": config.max_position_size_btc
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error starting Bitcoin arbitrage: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starting Bitcoin arbitrage: {str(e)}")
+
+@app.get("/api/bitcoin-arbitrage/status")
+async def get_bitcoin_arbitrage_status():
+    """Get Bitcoin arbitrage strategy status"""
+    try:
+        if "bitcoin_strategy" not in globals() or not bitcoin_strategy:
+            return {
+                "status": "inactive",
+                "message": "Bitcoin arbitrage strategy is not running"
+            }
+        
+        status = bitcoin_strategy.get_strategy_status()
+        return {
+            "status": "active",
+            "data": status,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting Bitcoin arbitrage status: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting Bitcoin arbitrage status: {str(e)}")
 
 @app.post("/api/optimize")
 async def optimize_parameters(request: OptimizationRequest, background_tasks: BackgroundTasks):
@@ -566,6 +670,57 @@ async def execute_optimization(request: OptimizationRequest):
         })
     finally:
         running_tasks["optimization"] = False
+
+async def execute_bitcoin_backtest(request: BitcoinBacktestRequest):
+    """Execute Bitcoin arbitrage backtest in background"""
+    running_tasks["bitcoin_backtest"] = True
+    
+    try:
+        logger.info("Starting Bitcoin arbitrage backtest")
+        
+        await manager.send_data({
+            "type": "bitcoin_backtest_started",
+            "message": "Bitcoin arbitrage backtest started"
+        })
+        
+        from upbit_bot.bitcoin_backtest import BitcoinBacktestConfig, BitcoinBacktester
+        
+        # Create configuration
+        config = BitcoinBacktestConfig(
+            initial_balance_krw=request.initial_balance_krw,
+            initial_balance_usdt=request.initial_balance_usdt,
+            entry_premium_threshold=request.entry_premium_threshold,
+            exit_premium_threshold=request.exit_premium_threshold,
+            max_position_size_btc=request.max_position_size_btc
+        )
+        
+        # Create and run backtest
+        backtester = BitcoinBacktester(config)
+        
+        # Send progress updates
+        await manager.send_data({
+            "type": "bitcoin_backtest_progress",
+            "progress": 20,
+            "message": "Fetching historical data..."
+        })
+        
+        result = backtester.run_backtest(request.start_date, request.end_date)
+        
+        # Send completion
+        await manager.send_data({
+            "type": "bitcoin_backtest_complete",
+            "data": result
+        })
+        
+    except Exception as e:
+        logger.error(f"Bitcoin backtest error: {e}")
+        await manager.send_data({
+            "type": "bitcoin_backtest_error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
+    finally:
+        running_tasks["bitcoin_backtest"] = False
 
 def get_html_content():
     """Return the HTML content for the web interface"""
