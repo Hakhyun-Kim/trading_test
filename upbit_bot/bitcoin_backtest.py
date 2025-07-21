@@ -19,15 +19,20 @@ logger = logging.getLogger(__name__)
 @dataclass 
 class BitcoinBacktestConfig:
     """Configuration for Bitcoin arbitrage backtesting"""
-    initial_balance_krw: float = 13_500_000  # 10,000 USD in KRW
-    initial_balance_usdt: float = 10_000     # USDT for Binance
+    initial_balance_krw: float = 13_500_000  # 10,000 USD in KRW (1x leverage for Upbit)
+    initial_balance_usdt: float = 5_000      # USDT for Binance (2x leverage for shorting)
     initial_btc: float = 0.0                 # Starting BTC
-    entry_premium_threshold: float = 0.3     # Entry threshold
-    exit_premium_threshold: float = 1.3      # Exit threshold
+    entry_premium_threshold: float = -2.0    # Entry threshold (negative kimchi premium)
+    exit_profit_threshold: float = 2.0       # Exit threshold (actual profit percentage)
     max_position_size_btc: float = 0.1       # Max BTC per position
+    leverage_multiplier: float = 2.0         # Leverage for Binance futures (2x)
     upbit_commission: float = 0.0025         # 0.25% Upbit fee
     binance_commission: float = 0.001        # 0.1% Binance fee
+    binance_funding_rate: float = 0.0001     # 0.01% Binance funding fee (8h)
+    upbit_krw_fee: float = 0.02              # 2% Upbit KRW fee
     slippage_rate: float = 0.001             # 0.1% slippage
+    use_scaled_strategy: bool = True         # Use scaled entry/exit strategy
+    position_portion: float = 0.25           # 25% of capital per position
 
 class BitcoinBacktester:
     """Backtest Bitcoin arbitrage strategy"""
@@ -37,6 +42,14 @@ class BitcoinBacktester:
         self.binance = ccxt.binance()
         self.upbit = ccxt.upbit()
         
+    def calculate_funding_income(self, position_size: float, position_value_usdt: float, 
+                               hours_held: int) -> float:
+        """Calculate Binance funding income for short positions"""
+        # Funding income is received every 8 hours for short positions
+        funding_periods = hours_held / 8
+        funding_income = position_value_usdt * self.config.binance_funding_rate * funding_periods
+        return funding_income
+    
     def fetch_historical_data(self, start_date: str, end_date: str, 
                             timeframe: str = '1h') -> pd.DataFrame:
         """Fetch historical data from exchanges"""
@@ -126,7 +139,7 @@ class BitcoinBacktester:
             return pd.DataFrame()
     
     def simulate_trades(self, df: pd.DataFrame) -> Dict:
-        """Simulate trades based on historical data"""
+        """Simulate trades based on historical data with scaled entry/exit strategy"""
         # Initialize balances
         balance_krw = self.config.initial_balance_krw
         balance_usdt = self.config.initial_balance_usdt
@@ -137,91 +150,194 @@ class BitcoinBacktester:
         open_positions = []
         balance_history = []
         
-        # Strategy configuration
-        arb_config = BitcoinArbitrageConfig(
-            entry_premium_threshold=self.config.entry_premium_threshold,
-            exit_premium_threshold=self.config.exit_premium_threshold,
-            max_position_size_btc=self.config.max_position_size_btc
-        )
+        # Scaled strategy configuration
+        if self.config.use_scaled_strategy:
+            # Entry levels: 0%, -0.5%, -1.0%, -1.5%, -2.0%, -2.5%, -3.0%, -3.5%, -4.0%
+            entry_levels = [0.0, -0.5, -1.0, -1.5, -2.0, -2.5, -3.0, -3.5, -4.0]
+            # Exit levels: 0.5%, 1.0%, 1.5%, 2.0%, 2.5%, etc.
+            exit_levels = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+            
+            # Track which entry/exit levels have been used
+            used_entry_levels = set()
+            used_exit_levels = set()
+        else:
+            # Fallback to original strategy
+            entry_levels = [self.config.entry_premium_threshold]
+            exit_levels = [self.config.exit_profit_threshold]
+            used_entry_levels = set()
+            used_exit_levels = set()
         
         for idx, row in df.iterrows():
             current_premium = row['kimchi_premium']
             btc_price_krw = row['upbit_close']
             btc_price_usdt = row['binance_close']
             
-            # Check for entry signals
-            if current_premium < arb_config.entry_premium_threshold and len(open_positions) < 3:
-                # Calculate position size
-                max_btc_by_usdt = balance_usdt / btc_price_usdt * 0.95
-                max_btc_by_krw = balance_krw / btc_price_krw * 0.95
-                position_size = min(arb_config.max_position_size_btc, max_btc_by_usdt, max_btc_by_krw)
-                
-                if position_size >= 0.001:  # Minimum order size
-                    # Execute entry
-                    upbit_cost = position_size * btc_price_krw * (1 + self.config.upbit_commission)
-                    binance_proceeds = position_size * btc_price_usdt * (1 - self.config.binance_commission)
+            # SCALED ENTRY STRATEGY
+            if self.config.use_scaled_strategy:
+                for entry_level in entry_levels:
+                    # Check if we should enter at this level
+                    if (current_premium < entry_level and 
+                        entry_level not in used_entry_levels and
+                        len(open_positions) < len(entry_levels)):  # Max 8 positions
+                        
+                        # Calculate position size (25% of initial total capital)
+                        initial_total_krw = self.config.initial_balance_krw + (self.config.initial_balance_usdt * 1300)  # Approximate KRW equivalent
+                        available_krw = initial_total_krw * self.config.position_portion
+                        available_usdt = self.config.initial_balance_usdt * self.config.position_portion
+                        
+                        # Calculate max BTC we can buy with available KRW
+                        max_btc_by_krw = available_krw / btc_price_krw * 0.95
+                        # Calculate max BTC we can short with available USDT (2x leverage)
+                        max_btc_by_usdt = (available_usdt * self.config.leverage_multiplier) / btc_price_usdt * 0.95
+                        
+                        position_size = min(self.config.max_position_size_btc, max_btc_by_krw, max_btc_by_usdt)
+                        
+                        if position_size >= 0.001:  # Minimum order size
+                            # Execute entry with income
+                            upbit_cost = position_size * btc_price_krw * (1 + self.config.upbit_commission)
+                            # Add KRW deposit income for Upbit (2% bonus)
+                            krw_deposit_income = upbit_cost * self.config.upbit_krw_fee
+                            total_upbit_cost = upbit_cost - krw_deposit_income  # Income reduces cost
+                            
+                            binance_margin_required = (position_size * btc_price_usdt) / self.config.leverage_multiplier
+                            binance_proceeds = position_size * btc_price_usdt * (1 - self.config.binance_commission)
+                            
+                            if balance_krw >= total_upbit_cost and balance_usdt >= binance_margin_required:
+                                # Buy on Upbit
+                                balance_krw -= total_upbit_cost
+                                balance_btc += position_size
+                                
+                                # Short on Binance with leverage
+                                balance_usdt -= binance_margin_required
+                                
+                                position = {
+                                    'entry_time': idx,
+                                    'entry_premium': current_premium,
+                                    'entry_level': entry_level,
+                                    'size': position_size,
+                                    'upbit_entry_price': btc_price_krw,
+                                    'binance_entry_price': btc_price_usdt,
+                                    'upbit_cost_krw': total_upbit_cost,
+                                    'binance_margin_usdt': binance_margin_required,
+                                    'binance_proceeds_usdt': binance_proceeds,
+                                    'leverage': self.config.leverage_multiplier
+                                }
+                                
+                                open_positions.append(position)
+                                used_entry_levels.add(entry_level)
+                                
+                                trades.append({
+                                    'time': idx,
+                                    'type': 'ENTRY',
+                                    'premium': current_premium,
+                                    'entry_level': entry_level,
+                                    'size': position_size,
+                                    'upbit_price': btc_price_krw,
+                                    'binance_price': btc_price_usdt,
+                                    'leverage': self.config.leverage_multiplier
+                                })
+                                break  # Only enter one position per iteration
+            else:
+                # Original strategy
+                if current_premium < self.config.entry_premium_threshold and len(open_positions) < 3:
+                    max_btc_by_usdt = (balance_usdt * self.config.leverage_multiplier) / btc_price_usdt * 0.95
+                    max_btc_by_krw = balance_krw / btc_price_krw * 0.95
+                    position_size = min(self.config.max_position_size_btc, max_btc_by_usdt, max_btc_by_krw)
                     
-                    if balance_krw >= upbit_cost and balance_usdt >= binance_proceeds:
-                        # Buy on Upbit
-                        balance_krw -= upbit_cost
-                        balance_btc += position_size
+                    if position_size >= 0.001:
+                        upbit_cost = position_size * btc_price_krw * (1 + self.config.upbit_commission)
+                        binance_margin_required = (position_size * btc_price_usdt) / self.config.leverage_multiplier
+                        binance_proceeds = position_size * btc_price_usdt * (1 - self.config.binance_commission)
                         
-                        # Short on Binance (simplified: just track USDT)
-                        balance_usdt += binance_proceeds
-                        
-                        position = {
-                            'entry_time': idx,
-                            'entry_premium': current_premium,
-                            'size': position_size,
-                            'upbit_entry_price': btc_price_krw,
-                            'binance_entry_price': btc_price_usdt,
-                            'upbit_cost_krw': upbit_cost,
-                            'binance_proceeds_usdt': binance_proceeds
-                        }
-                        
-                        open_positions.append(position)
-                        
-                        trades.append({
-                            'time': idx,
-                            'type': 'ENTRY',
-                            'premium': current_premium,
-                            'size': position_size,
-                            'upbit_price': btc_price_krw,
-                            'binance_price': btc_price_usdt
-                        })
+                        if balance_krw >= upbit_cost and balance_usdt >= binance_margin_required:
+                            balance_krw -= upbit_cost
+                            balance_btc += position_size
+                            balance_usdt -= binance_margin_required
+                            
+                            position = {
+                                'entry_time': idx,
+                                'entry_premium': current_premium,
+                                'size': position_size,
+                                'upbit_entry_price': btc_price_krw,
+                                'binance_entry_price': btc_price_usdt,
+                                'upbit_cost_krw': upbit_cost,
+                                'binance_margin_usdt': binance_margin_required,
+                                'binance_proceeds_usdt': binance_proceeds,
+                                'leverage': self.config.leverage_multiplier
+                            }
+                            
+                            open_positions.append(position)
+                            
+                            trades.append({
+                                'time': idx,
+                                'type': 'ENTRY',
+                                'premium': current_premium,
+                                'size': position_size,
+                                'upbit_price': btc_price_krw,
+                                'binance_price': btc_price_usdt,
+                                'leverage': self.config.leverage_multiplier
+                            })
             
-            # Check for exit signals
+            # SCALED EXIT STRATEGY
             positions_to_close = []
+            
             for i, pos in enumerate(open_positions):
-                if current_premium > arb_config.exit_premium_threshold:
-                    positions_to_close.append(i)
+                # Calculate total arbitrage profit percentage
+                upbit_profit_pct = ((btc_price_krw - pos['upbit_entry_price']) / pos['upbit_entry_price']) * 100
+                binance_profit_pct = ((pos['binance_entry_price'] - btc_price_usdt) / pos['binance_entry_price']) * 100
+                total_profit_percentage = (upbit_profit_pct + binance_profit_pct) / 2
+                
+                if self.config.use_scaled_strategy:
+                    # Check each exit level
+                    for exit_level in exit_levels:
+                        if (total_profit_percentage > exit_level and 
+                            exit_level not in used_exit_levels and
+                            pos.get('entry_level', 0) <= -0.5):  # Only exit positions entered at premium < -0.5%
+                            
+                            positions_to_close.append((i, exit_level))
+                            used_exit_levels.add(exit_level)
+                            break
+                else:
+                    # Original exit strategy
+                    if total_profit_percentage > self.config.exit_profit_threshold:
+                        positions_to_close.append((i, self.config.exit_profit_threshold))
             
             # Close positions
-            for i in reversed(positions_to_close):
+            for i, exit_level in reversed(positions_to_close):
                 pos = open_positions.pop(i)
+                
+                # Calculate position duration for funding income
+                position_duration = (idx - pos['entry_time']).total_seconds() / 3600  # hours
+                position_value_usdt = pos['size'] * pos['binance_entry_price']
+                funding_income = self.calculate_funding_income(pos['size'], position_value_usdt, position_duration)
                 
                 # Sell on Upbit
                 upbit_proceeds = pos['size'] * btc_price_krw * (1 - self.config.upbit_commission)
-                balance_krw += upbit_proceeds
+                # Add KRW withdrawal income for Upbit (2% bonus)
+                krw_withdrawal_income = upbit_proceeds * self.config.upbit_krw_fee
+                net_upbit_proceeds = upbit_proceeds + krw_withdrawal_income  # Income increases proceeds
+                balance_krw += net_upbit_proceeds
                 balance_btc -= pos['size']
                 
                 # Close short on Binance
                 binance_cost = pos['size'] * btc_price_usdt * (1 + self.config.binance_commission)
-                balance_usdt -= binance_cost
+                balance_usdt += pos['binance_margin_usdt']
                 
-                # Calculate P&L
-                upbit_pnl_krw = upbit_proceeds - pos['upbit_cost_krw']
-                binance_pnl_usdt = pos['binance_proceeds_usdt'] - binance_cost
+                # Calculate P&L with income
+                upbit_pnl_krw = net_upbit_proceeds - pos['upbit_cost_krw']
+                binance_pnl_usdt = pos['binance_proceeds_usdt'] - binance_cost + funding_income
                 
                 trades.append({
                     'time': idx,
                     'type': 'EXIT',
                     'premium': current_premium,
+                    'exit_level': exit_level,
                     'size': pos['size'],
                     'upbit_price': btc_price_krw,
                     'binance_price': btc_price_usdt,
                     'upbit_pnl_krw': upbit_pnl_krw,
                     'binance_pnl_usdt': binance_pnl_usdt,
+                    'funding_income_usdt': funding_income,
                     'total_pnl_krw': upbit_pnl_krw + (binance_pnl_usdt * row['usd_krw_rate'])
                 })
             

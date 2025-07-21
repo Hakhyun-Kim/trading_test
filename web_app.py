@@ -74,8 +74,8 @@ class OptimizationRequest(BaseModel):
 
 class BitcoinArbitrageRequest(BaseModel):
     """Request model for Bitcoin arbitrage strategy"""
-    entry_premium_threshold: float = Field(0.3, description="Enter position when kimchi premium < this %")
-    exit_premium_threshold: float = Field(1.3, description="Exit position when kimchi premium > this %")
+    entry_premium_threshold: float = Field(-2.0, description="Enter position when kimchi premium < this % (negative value)")
+    exit_profit_threshold: float = Field(2.0, description="Exit position when profit > this % (actual profit percentage)")
     max_position_size_btc: float = Field(0.1, description="Maximum BTC position size")
     tick_offset: int = Field(1, description="Number of ticks for limit orders on Upbit")
     max_open_positions: int = Field(3, description="Maximum simultaneous positions")
@@ -85,8 +85,8 @@ class BitcoinBacktestRequest(BaseModel):
     """Request model for Bitcoin arbitrage backtesting"""
     start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
     end_date: str = Field(..., description="End date in YYYY-MM-DD format")
-    initial_balance_krw: float = Field(13_500_000, description="Initial KRW balance")
-    initial_balance_usdt: float = Field(10_000, description="Initial USDT balance")
+    initial_balance_krw: float = Field(13_500_000, description="Initial KRW balance (1x leverage for Upbit)")
+    initial_balance_usdt: float = Field(5_000, description="Initial USDT balance")
     entry_premium_threshold: float = Field(0.3, description="Entry threshold %")
     exit_premium_threshold: float = Field(1.3, description="Exit threshold %")
     max_position_size_btc: float = Field(0.1, description="Max BTC per position")

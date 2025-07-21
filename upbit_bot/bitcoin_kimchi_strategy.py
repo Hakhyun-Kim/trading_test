@@ -23,13 +23,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BitcoinArbitrageConfig:
     """Configuration for Bitcoin arbitrage strategy"""
-    entry_premium_threshold: float = 0.3  # Enter position when premium < 0.3%
-    exit_premium_threshold: float = 1.3   # Exit position when premium > 1.3%
-    max_position_size_btc: float = 0.1    # Maximum BTC position size
-    tick_offset: int = 1                  # Number of ticks for limit orders
-    max_open_positions: int = 3           # Maximum simultaneous positions
+    entry_premium_threshold: float = -2.0  # Enter position when premium < -2.0% (negative kimchi premium)
+    exit_profit_threshold: float = 2.0     # Exit position when profit > 2.0% (actual profit percentage)
+    max_position_size_btc: float = 0.1     # Maximum BTC position size
+    tick_offset: int = 1                   # Number of ticks for limit orders
+    max_open_positions: int = 3            # Maximum simultaneous positions
     use_market_orders_binance: bool = True  # Use market orders on Binance
-    min_order_size_btc: float = 0.001     # Minimum BTC order size
+    min_order_size_btc: float = 0.001      # Minimum BTC order size
 
 class BitcoinKimchiPremiumCalculator:
     """Calculate Bitcoin kimchi premium between Binance and Upbit"""
@@ -212,11 +212,21 @@ class BitcoinArbitrageStrategy:
         
         return False
     
-    def should_exit_position(self, position: Dict, current_premium: float) -> bool:
+    def should_exit_position(self, position: Dict, current_premium: float, current_upbit_price: float, current_binance_price: float) -> bool:
         """Check if we should exit an existing position"""
-        # Exit if premium exceeds exit threshold
-        if current_premium > self.config.exit_premium_threshold:
-            logger.info(f"Kimchi premium {current_premium:.2f}% > exit threshold {self.config.exit_premium_threshold}%")
+        # Calculate total arbitrage profit percentage (both Upbit and Binance)
+        # Upbit: Buy low, sell high
+        upbit_profit_pct = ((current_upbit_price - position['upbit_entry_price']) / position['upbit_entry_price']) * 100
+        
+        # Binance: Short high, buy low (inverse relationship)
+        binance_profit_pct = ((position['binance_entry_price'] - current_binance_price) / position['binance_entry_price']) * 100
+        
+        # Total arbitrage profit (weighted average)
+        total_profit_percentage = (upbit_profit_pct + binance_profit_pct) / 2
+        
+        # Exit if total profit exceeds threshold
+        if total_profit_percentage > self.config.exit_profit_threshold:
+            logger.info(f"Total arbitrage profit {total_profit_percentage:.2f}% > exit threshold {self.config.exit_profit_threshold}%")
             return True
         
         # Check position age (optional: add time-based exit)
@@ -308,7 +318,7 @@ class BitcoinArbitrageStrategy:
             return {
                 'strategy_name': 'Bitcoin Kimchi Premium Arbitrage',
                 'entry_threshold': self.config.entry_premium_threshold,
-                'exit_threshold': self.config.exit_premium_threshold,
+                'exit_profit_threshold': self.config.exit_profit_threshold,
                 'current_premium': premium_data.get('kimchi_premium_percentage', 0) if premium_data else 0,
                 'open_positions': len(self.open_positions),
                 'max_positions': self.config.max_open_positions,

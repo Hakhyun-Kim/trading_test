@@ -24,11 +24,11 @@ def run_single_backtest(entry_threshold: float, exit_threshold: float,
     try:
         # Create configuration
         config = BitcoinBacktestConfig(
-            initial_balance_krw=13_500_000,
-            initial_balance_usdt=10_000,
+                    initial_balance_krw=13_500_000,
+        initial_balance_usdt=5_000,
             initial_btc=0.0,
             entry_premium_threshold=entry_threshold,
-            exit_premium_threshold=exit_threshold,
+            exit_profit_threshold=exit_threshold,
             max_position_size_btc=0.1,
             upbit_commission=0.0025,
             binance_commission=0.001,

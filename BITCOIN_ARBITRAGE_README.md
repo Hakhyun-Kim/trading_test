@@ -61,8 +61,8 @@ config = BitcoinArbitrageConfig(
 
 ```python
 backtest_config = BitcoinBacktestConfig(
-    initial_balance_krw=13_500_000,  # ~$10,000 in KRW
-    initial_balance_usdt=10_000,     # $10,000 USDT for Binance
+    initial_balance_krw=13_500_000,  # ~$10,000 in KRW (1x leverage for Upbit)
+    initial_balance_usdt=5_000,      # $5,000 USDT for Binance (2x leverage for shorting)
     entry_premium_threshold=0.3,
     exit_premium_threshold=1.3,
     max_position_size_btc=0.1,
