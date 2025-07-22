@@ -1,5 +1,7 @@
 # Enhanced Upbit Trading Bot 🚀
 
+> **Advanced cryptocurrency arbitrage trading bot for Upbit exchange with USDT/USD price differences, Bitcoin arbitrage strategies, comprehensive risk management, and modern web interface. Features real-time monitoring, backtesting, parameter optimization, and virtual trading capabilities.**
+
 An advanced cryptocurrency arbitrage trading bot for Upbit exchange that leverages USDT/USD price differences against KRW rates. This enhanced version includes comprehensive risk management, real-time monitoring, strategy optimization, and a modern web interface.
 
 ## ✨ Features
